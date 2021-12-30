@@ -1,0 +1,463 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Lab 3: The ORM Magic and The Service Layer &#8212; project123  文档</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true,
+        SOURCELINK_SUFFIX: '.txt'
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/translations.js"></script>
+    <link rel="index" title="索引" href="genindex.html" />
+    <link rel="search" title="搜索" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="lab-3-the-orm-magic-and-the-service-layer">
+<h1><strong>Lab 3</strong>: The ORM Magic and The Service Layer<a class="headerlink" href="#lab-3-the-orm-magic-and-the-service-layer" title="永久链接至标题">¶</a></h1>
+<p><strong>小组成员</strong></p>
+<p>201932110118韩舒扬</p>
+<p>201932110124李梁伟</p>
+<p>201932110122黄士极</p>
+<p>201932110121黄君杰</p>
+</div>
+<div class="section" id="orm-py">
+<h1>orm.py<a class="headerlink" href="#orm-py" title="永久链接至标题">¶</a></h1>
+<p># Software Architecture and Design Patterns – Lab 3 starter code
+# Copyright (C) 2021 Hui Lan</p>
+<p>import model</p>
+<p>from sqlalchemy import create_engine
+from sqlalchemy import Table, MetaData, Column, Integer, String, Date, ForeignKey
+from sqlalchemy.orm import mapper, relationship, sessionmaker, clear_mappers</p>
+<p>metadata = MetaData()</p>
+<dl class="docutils">
+<dt>articles = Table(</dt>
+<dd>‘articles’,
+metadata,
+Column(‘article_id’, Integer, primary_key=True, autoincrement=True),
+Column(‘text’, String(10000)),
+Column(‘source’, String(100)),
+Column(‘date’, String(10)),
+Column(‘level’, Integer, nullable=False),
+Column(‘question’, String(1000)),
+)</dd>
+<dt>users = Table(</dt>
+<dd>‘users’,
+metadata,
+Column(‘username’, String(100), primary_key=True),
+Column(‘password’, String(64)),
+Column(‘start_date’, String(10), nullable=False),
+Column(‘expiry_date’, String(10), nullable=False),
+)</dd>
+<dt>newwords = Table(</dt>
+<dd>‘newwords’,
+metadata,
+Column(‘word_id’, Integer, primary_key=True, autoincrement=True),
+Column(‘username’, String(100), ForeignKey(‘users.username’)),
+Column(‘word’, String(20)),
+Column(‘date’, String(10)),
+)</dd>
+<dt>readings = Table(</dt>
+<dd>‘readings’,
+metadata,
+Column(‘id’, Integer, primary_key=True, autoincrement=True),
+Column(‘username’, String(100), ForeignKey(‘users.username’)),
+Column(‘article_id’, Integer, ForeignKey(‘articles.article_id’)),
+)</dd>
+<dt>def start_mappers():</dt>
+<dd>metadata.create_all(create_engine(‘sqlite:///EnglishPalDatabase.db’))
+mapper(model.User, users)
+mapper(model.NewWord, newwords)
+mapper(model.Article, articles)
+mapper(model.Reading, readings)</dd>
+</dl>
+</div>
+<div class="section" id="model-py">
+<h1>model.py<a class="headerlink" href="#model-py" title="永久链接至标题">¶</a></h1>
+<p># Software Architecture and Design Patterns – Lab 3 starter code
+# Copyright (C) 2021 Hui Lan</p>
+<p>from dataclasses import dataclass</p>
+<p>&#64;dataclass
+class Article:</p>
+<blockquote>
+<div>article_id:int
+text:str
+source:str
+date:str
+level:int
+question:str</div></blockquote>
+<dl class="docutils">
+<dt>class Reading:</dt>
+<dd><dl class="first last docutils">
+<dt>def __init__(self, username, article_id):</dt>
+<dd>self.username = username
+self.article_id = article_id</dd>
+</dl>
+</dd>
+<dt>class NewWord:</dt>
+<dd><dl class="first last docutils">
+<dt>def __init__(self, username, word=’‘, date=’yyyy-mm-dd’):</dt>
+<dd>self.username = username
+self.word = word
+self.date = date</dd>
+</dl>
+</dd>
+<dt>class User:</dt>
+<dd><dl class="first last docutils">
+<dt>def __init__(self, username, password=‘12345’, start_date=‘2021-05-19’, expiry_date=‘2031-05-19’):</dt>
+<dd>self.username = username
+self.password = password
+self.start_date = start_date
+self.expiry_date = expiry_date
+self._read = []</dd>
+<dt>def read_article(self, article):</dt>
+<dd>self._read.append(article)
+return article.article_id</dd>
+</dl>
+</dd>
+</dl>
+</div>
+<div class="section" id="repository-py">
+<h1>repository.py<a class="headerlink" href="#repository-py" title="永久链接至标题">¶</a></h1>
+<p># Software Architecture and Design Patterns – Lab 3 starter code
+# An implementation of the Repository Pattern
+# Copyright (C) 2021 Hui Lan</p>
+<p>import abc
+import model
+from sqlalchemy.orm.exc import NoResultFound</p>
+<dl class="docutils">
+<dt>class AbstractRepository(abc.ABC):</dt>
+<dd><p class="first">&#64;abc.abstractmethod
+def add(self, entity):</p>
+<blockquote>
+<div>raise NotImplementedError</div></blockquote>
+<p>&#64;abc.abstractmethod
+def get(self, reference):</p>
+<blockquote class="last">
+<div>raise NotImplementedError</div></blockquote>
+</dd>
+<dt>class ArticleRepository(AbstractRepository):</dt>
+<dd><dl class="first last docutils">
+<dt>def __init__(self, session):</dt>
+<dd>self.session = session</dd>
+<dt>def add(self, article):</dt>
+<dd>self.session.add(article)</dd>
+<dt>def get(self, reference):</dt>
+<dd><dl class="first last docutils">
+<dt>try:</dt>
+<dd>return self.session.query(model.Article).filter_by(article_id=reference).one()</dd>
+<dt>except NoResultFound:</dt>
+<dd>return None</dd>
+</dl>
+</dd>
+<dt>def list(self):</dt>
+<dd>return self.session.query(model.Article).all()</dd>
+</dl>
+</dd>
+<dt>class UserRepository(AbstractRepository):</dt>
+<dd><dl class="first last docutils">
+<dt>def __init__(self, session):</dt>
+<dd>self.session = session</dd>
+<dt>def add(self, user):</dt>
+<dd>self.session.add(user)</dd>
+<dt>def get(self, reference):</dt>
+<dd><dl class="first last docutils">
+<dt>try:</dt>
+<dd>return self.session.query(model.User).filter_by(username=reference).one()</dd>
+<dt>except NoResultFound:</dt>
+<dd>return None</dd>
+</dl>
+</dd>
+<dt>def list(self):</dt>
+<dd>return self.session.query(model.User).all()</dd>
+</dl>
+</dd>
+</dl>
+</div>
+<div class="section" id="services-py">
+<h1>services.py<a class="headerlink" href="#services-py" title="永久链接至标题">¶</a></h1>
+<p># Software Architecture and Design Patterns – Lab 3 starter code
+# An implementation of the Service Layer
+# Copyright (C) 2021 Hui Lan</p>
+<p># word and its difficulty level
+WORD_DIFFICULTY_LEVEL = {‘starbucks’:5, ‘luckin’:4, ‘secondcup’:4, ‘costa’:3, ‘timhortons’:3, ‘frappuccino’:6}</p>
+<p>import pytest
+import math
+import model</p>
+<dl class="docutils">
+<dt>class UnknownUser(Exception):</dt>
+<dd>pass</dd>
+<dt>class NoArticleMatched(Exception):</dt>
+<dd>pass</dd>
+<dt>def read(user, user_repo, article_repo, session):</dt>
+<dd><p class="first">u = user_repo.get(user.username)
+if u == None or u.password != user.password:</p>
+<blockquote>
+<div>raise UnknownUser()</div></blockquote>
+<p>articles = article_repo.list()</p>
+<dl class="docutils">
+<dt>if articles == None:</dt>
+<dd>raise NoArticleMatched()</dd>
+<dt>words = session.execute(</dt>
+<dd>‘SELECT word FROM newwords WHERE username=:username’,
+dict(username=user.username),</dd>
+</dl>
+<p>)</p>
+<p>sum = 0
+count = 0
+for word in words:</p>
+<blockquote>
+<div>sum += WORD_DIFFICULTY_LEVEL[word[0]]
+count += 1</div></blockquote>
+<dl class="docutils">
+<dt>if count == 0:</dt>
+<dd>count = 1</dd>
+</dl>
+<p>average = round(sum / count) + 1
+if average &lt; 3:</p>
+<blockquote>
+<div>average = 3</div></blockquote>
+<dl class="docutils">
+<dt>for article in articles:</dt>
+<dd><dl class="first last docutils">
+<dt>if average == article.level:</dt>
+<dd>article_id = user.read_article(article)
+session.add(model.Reading(username = user.username, article_id = article_id))
+session.commit()
+return article_id</dd>
+</dl>
+</dd>
+</dl>
+<p class="last">raise NoArticleMatched()</p>
+</dd>
+</dl>
+</div>
+<div class="section" id="conftest-py">
+<h1>conftest.py<a class="headerlink" href="#conftest-py" title="永久链接至标题">¶</a></h1>
+<p># Software Architecture and Design Patterns – Lab 3 starter code
+# Copyright (C) 2021 Hui Lan</p>
+<p>import pytest
+import orm
+import model</p>
+<p>from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, clear_mappers</p>
+<p>&#64;pytest.fixture
+def engine():</p>
+<blockquote>
+<div>engine = create_engine(‘sqlite:///EnglishPalDatabase.db’) # use your own path
+# engine = create_engine(‘mysql+mysqlconnector://root:123456&#64;localhost:3307/test?charset=utf8’)
+return engine</div></blockquote>
+<p>&#64;pytest.fixture
+def get_session(engine):</p>
+<blockquote>
+<div>orm.start_mappers()
+yield sessionmaker(bind=engine)
+clear_mappers()</div></blockquote>
+<p>&#64;pytest.fixture
+def prepare_data():</p>
+<blockquote>
+<div><p>engine = create_engine(‘sqlite:///EnglishPalDatabase.db’)
+orm.start_mappers()
+orm.metadata.drop_all(engine)
+orm.metadata.create_all(engine)
+session = sessionmaker(bind=engine)()</p>
+<p># add users
+session.add(model.User(username=’mrlan’, password=‘12345’, start_date=‘2021-05-14’))
+session.add(model.User(username=’lanhui’, password=’Hard2Guess!’, start_date=‘2021-05-15’))
+session.add(model.User(username=’hui’, <a class="reference external" href="mailto:password='G00d&#37;&#52;&#48;English">password=’G00d<span>&#64;</span>English</a>:)’, start_date=‘2021-05-30’))
+session.commit()</p>
+<p># add words
+session.add(model.NewWord(username=’lanhui’, word=’starbucks’, date=‘2021-05-15’))
+session.add(model.NewWord(username=’lanhui’, word=’luckin’, date=‘2021-05-15’))
+session.add(model.NewWord(username=’lanhui’, word=’secondcup’, date=‘2021-05-15’))
+session.add(model.NewWord(username=’mrlan’,  word=’costa’, date=‘2021-05-15’))
+session.add(model.NewWord(username=’mrlan’,  word=’timhortons’, date=‘2021-05-15’))
+session.add(model.NewWord(username=’hui’,  word=’frappuccino’, date=‘2021-05-15’))
+session.commit()</p>
+<p># add articles
+article = model.Article(article_id=1, text=’THE ORIGIN OF SPECIES BY MEANS OF NATURAL SELECTION, OR THE PRESERVATION OF FAVOURED RACES IN THE STRUGGLE FOR LIFE’, source=’CHARLES DARWIN, M.A.’, date=‘1859-01-01’, level=5, question=’Are humans descended from monkeys?’)
+session.add(article)</p>
+<p>article = model.Article(article_id=2, text=’THE ELEMENTS OF STYLE’, source=’WILLIAM STRUNK JR. &amp; E.B. WHITE’, date=‘1999-01-01’, level=4, question=’Who may benefit from this book?’)
+session.add(article)</p>
+<p>session.commit()</p>
+<p>session.close()</p>
+<p>clear_mappers()</p>
+</div></blockquote>
+</div>
+<div class="section" id="test-services-py">
+<h1>test_services.py<a class="headerlink" href="#test-services-py" title="永久链接至标题">¶</a></h1>
+<p># Software Architecture and Design Patterns – Lab 3 starter code
+# Run this script using the following command: pytest -v -s test_services.py
+# Copyright (C) 2021 Hui Lan</p>
+<p>import pytest</p>
+<p>import model
+import repository
+import services</p>
+<p>&#64;pytest.mark.usefixtures(‘prepare_data’)
+def test_read_article_level4(get_session):</p>
+<blockquote>
+<div><p>session = get_session()
+article_repo = repository.ArticleRepository(session)
+user_repo = repository.UserRepository(session)</p>
+<p>username = ‘mrlan’
+password = ‘12345’
+user = model.User(username=username, password=password)
+article_id = services.read(user, user_repo, article_repo, session)</p>
+<dl class="docutils">
+<dt>result = session.execute(</dt>
+<dd>‘SELECT article_id FROM readings WHERE username=:username’,
+dict(username=username),</dd>
+</dl>
+<p>)</p>
+<p>lst = [r[0] for r in result]</p>
+<p>assert article_id == 2
+assert lst[0] == 2</p>
+</div></blockquote>
+<p>&#64;pytest.mark.usefixtures(‘prepare_data’)
+def test_read_article_level5(get_session):</p>
+<blockquote>
+<div><p>session = get_session()
+article_repo = repository.ArticleRepository(session)
+user_repo = repository.UserRepository(session)</p>
+<p>username = ‘lanhui’
+password = ‘Hard2Guess!’
+user = model.User(username=username, password=password)
+article_id = services.read(user, user_repo, article_repo, session)</p>
+<dl class="docutils">
+<dt>result = session.execute(</dt>
+<dd>‘SELECT article_id FROM readings WHERE username=:username’,
+dict(username=username),</dd>
+</dl>
+<p>)</p>
+<p>lst = [r[0] for r in result]
+assert article_id == 1
+assert lst[0] == 1</p>
+</div></blockquote>
+<p>&#64;pytest.mark.usefixtures(‘prepare_data’)
+def test_read_article_level6(get_session):</p>
+<blockquote>
+<div><p>session = get_session()
+article_repo = repository.ArticleRepository(session)
+user_repo = repository.UserRepository(session)</p>
+<p>username = ‘hui’
+password = <a class="reference external" href="mailto:'G00d&#37;&#52;&#48;English">‘G00d<span>&#64;</span>English</a>:)’
+user = model.User(username=username, password=password)
+with pytest.raises(services.NoArticleMatched):</p>
+<blockquote>
+<div>article_id = services.read(user, user_repo, article_repo, session)</div></blockquote>
+</div></blockquote>
+<p>&#64;pytest.mark.usefixtures(‘prepare_data’)
+def test_user_with_wrong_password(get_session):</p>
+<blockquote>
+<div><p>session = get_session()
+article_repo = repository.ArticleRepository(session)
+user_repo = repository.UserRepository(session)</p>
+<p>username = ‘mrlan’
+password = ‘54321’
+user = model.User(username=username, password=password)
+with pytest.raises(services.UnknownUser):</p>
+<blockquote>
+<div>article_id = services.read(user, user_repo, article_repo, session)</div></blockquote>
+</div></blockquote>
+<p>&#64;pytest.mark.usefixtures(‘prepare_data’)
+def test_user_with_wrong_username(get_session):</p>
+<blockquote>
+<div><p>session = get_session()
+article_repo = repository.ArticleRepository(session)
+user_repo = repository.UserRepository(session)</p>
+<p>username = ‘MrLan’
+password = ‘12345’
+user = model.User(username=username, password=password)
+with pytest.raises(services.UnknownUser):</p>
+<blockquote>
+<div>article_id = services.read(user, user_repo, article_repo, session)</div></blockquote>
+</div></blockquote>
+<hr class="docutils" />
+<p>首先初始化用户和文章库，然后创建实体用户，调用服务的read()函数来获取article_id，最后，断言比较;</p>
+<p>但是第三个函数test_read_article_level6()是特殊的，因为在数据库中没有关于level6的文章，所以它需要输出异常- NoArticleMatched();</p>
+<p>通过services.py和test_services.py两个文件，在数据库中搜索所有用户，来验证用户是否存在，如果不存在，则输出异常- UnknownUser();</p>
+<p>单一职责原则，简称SRP，定义是：有且仅有一个原因引起接口或类的变更。</p>
+<p>read()函数遵循SRP单一职责原则。因为函数只用于返回article_id，如果没有article_id，则输出异常。</p>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="#">project123</a></h1>
+
+
+
+
+
+
+
+
+<h3>导航</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>快速搜索</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="转向" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, hj.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.6.3</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+      |
+      <a href="_sources/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
